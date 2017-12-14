@@ -83,6 +83,7 @@ class Filter(AssemblyCommon):
 
     def __init__(self):
 
+        #Base class
         AssemblyCommon.__init__(self)
 
         #Output directory for filtrated assembly files
@@ -111,6 +112,7 @@ class Filter(AssemblyCommon):
             #For each record in the assembly file
             for my_rec in SeqIO.parse("{0}{1}{2}".format(self.assembly_dir,specimen,'.fasta'), "fasta"):
 
+                #Fasta header parsing
                 id_parse = re.search(r'NODE_\d+_length_(\d+)_cov_(\S+)_ID_',my_rec.id)
                 contig_length = id_parse.group(1)
                 contig_cov = id_parse.group(2)
@@ -128,9 +130,13 @@ class Filter(AssemblyCommon):
 
 
 class AssembStat(AssemblyCommon):
+    """
+    Compute assemblies statistics
+    """
 
     def __init__(self):
 
+        #Base class
         AssemblyCommon.__init__(self)
 
         # Output directory for statistics files
@@ -146,29 +152,55 @@ class AssembStat(AssemblyCommon):
 
 
     def CompileLengthAndCov(self,specimen):
+        """
+        Compilation of contig length and coverage
+        for this specimen
+        :param specimen:
+        :return:
+        """
 
+        #Mean GC percent
         mean_gc = lambda gc,length : round(gc * 100.0 / length, 0)
+
+        #Mean weigthed coverage
         mean_weighted_coverage =  lambda covlenList,length : round(sum([float(x)/float(length) for x in covlenList]),0)
 
+        #Output statistic file
         stat_file = self.out + "AssembStat_" + specimen + ".txt"
 
+        #Total contig length
         total_length = 0
+
+        #Total GC content
         total_gc = 0
+
+        #List of coverage x contig length
         covlen_list = []
 
-
+        #Write the compilation in the output file
         with open(stat_file, 'w') as writef:
 
+            #Header
             writef.write("NODE\tCoverage\tLength\n")
 
             try:
 
+                #Parse every record
                 for my_rec in SeqIO.parse("{0}{1}{2}".format(self.assembly_dir, specimen, '.fasta'), "fasta"):
+
+                    #Fasta header parsing
                     id_parse = re.search(r'NODE_(\d+)_length_(\d+)_cov_(\S+)_ID_', my_rec.id)
+
+                    #Node ID
                     node = id_parse.group(1)
+
+                    #Contig length
                     contig_length = id_parse.group(2)
+
+                    #Contig coverage
                     contig_cov = id_parse.group(3)
 
+                    #Keep this contig for compilation only if his length and his coverage is higher than threshold
                     if(int(contig_length) >= self.length_thresh and  int(re.search(r'(\d+)\.?',contig_cov).group(1)) >= self.cov_thresh):
                         writef.write(node + "\t" + contig_cov + "\t" + contig_length + "\n")
 
@@ -178,6 +210,7 @@ class AssembStat(AssemblyCommon):
 
                 writef.write("\n")
 
+                #Global Statistics
                 writef.write("Total length\tPercent GC\tMean coverage\n")
                 writef.write(str(total_length) + '\t' + str(mean_gc(total_gc,total_length)) + '\t' + str(mean_weighted_coverage(covlen_list,total_length)))
 
@@ -189,11 +222,12 @@ class AssembStat(AssemblyCommon):
         writef.close()
 
 
-
+#Contigs filtration
 if (args.do[0] == 'filter'):
     my_filter = Filter()
     my_filter.ParseYamlFile()
     map(my_filter.DoFiltration,my_filter.SpecList)
+#Statistics calculation
 else:
     my_stat = AssembStat()
     my_stat.ParseYamlFile()
