@@ -3,19 +3,20 @@ import os
 import sys
 import re
 import argparse
-import yaml
+
 from Bio import SeqIO
 
 '''
 ######################################################################
 # This script is used to perform filtration or compute statistics on #
-# a set of Spades assembly files.                                             #
+# a set of Spades assembly files.                                    #
 ######################################################################
 
 Command line example for filtration:
 -----------------------------------
 
-python AssemblyManager.py --assembdir '/home/eric/ProjetPersonnel/Programmation/ProjetPython/NGS/TEST/' --do 'filter' --yaml '/home/eric/ProjetPersonnel/Programmation/ProjetPython/NGS/TEST/myyaml.yaml' --length 1000 --cov 5
+python AssemblyManager.py --assembdir '/home/eric/ProjetPersonnel/Programmation/ProjetPython/NGS/TEST/' --do 'filter' 
+--gtp '/home/eric/ProjetPersonnel/Programmation/ProjetPython/NGS/InGit/GenomicTools/' --length 1000 --cov 5
 
 '''
 
@@ -29,8 +30,6 @@ parser.add_argument('--assembdir',metavar='[Required : Path to fasta assembly]',
 #User can choose to filter assembly files or compute statistics
 parser.add_argument('--do',nargs=1,type=str,choices=['filter','stat'],metavar='[Required : Type of treatment]',required=True)
 
-#Path to the yaml file with specimen list
-parser.add_argument('--yaml',type=str,metavar='[Required : Yaml file with specimen id]',nargs=1,required=True)
 
 #Contig length threshold
 parser.add_argument('--length',type=int,metavar='[Required : length threshold for filtration]',required=True,nargs=1)
@@ -38,7 +37,19 @@ parser.add_argument('--length',type=int,metavar='[Required : length threshold fo
 #Contig coverage threshold
 parser.add_argument('--cov',type=int,metavar='[Required : coverage threshold for filtration]',required=True,nargs=1)
 
+#Path to the GenomicTools modules
+parser.add_argument('--gtp',type=str,metavar='[Required : path to GenomicTools modules]',required=True,nargs=1)
+
 args=parser.parse_args()
+
+if (not os.path.exists(args.gtp[0])):
+    print "No GenomicsTools modules"
+    exit(0)
+
+sys.path.append(args.gtp[0])
+
+import PythonUtils
+from LinuxUtils import Bash
 
 
 class AssemblyCommon(object):
@@ -47,8 +58,7 @@ class AssemblyCommon(object):
     """
 
     def __init__(self):
-        # Path to yaml file with specimen id list
-        self.yaml_file_path = args.yaml[0]
+
 
         # Base directory with assembly fasta file
         self.assembly_dir = args.assembdir[0]
@@ -60,20 +70,13 @@ class AssemblyCommon(object):
         if (not self.assembly_dir.endswith('/')):
             self.assembly_dir = self.assembly_dir + '/'
 
-    def ParseYamlFile(self):
-        """
-        Build the specimen list
-        :return:
-        """
 
-        #yaml file with specimen list
-        self.yam_file = open(self.yaml_file_path).read()
+    def MakeSpecList(self):
 
-        #number of specimen
-        self.nb_spec = yaml.load(self.yam_file)[0]
+        fasta_list  = Bash.GetFastaInDir(self.assembly_dir)
 
-        #Specimen list
-        self.SpecList = yaml.load(self.yam_file)[1:self.nb_spec + 1]
+        self.SpecList = [PythonUtils.GetFastaPrefix(x) for x in list(fasta_list) ]
+
 
 
 class Filter(AssemblyCommon):
@@ -87,7 +90,7 @@ class Filter(AssemblyCommon):
         AssemblyCommon.__init__(self)
 
         #Output directory for filtrated assembly files
-        self.out = self.assembly_dir + r"Filtred/"
+        self.out = self.assembly_dir + r"Filtred"+ "_Over_" + str(self.length_thresh) + "pb_" + str(self.cov_thresh) + "X"  + "/"
 
         #Create the output directory
         try:
@@ -122,7 +125,7 @@ class Filter(AssemblyCommon):
                     rec_to_keep.append(my_rec)
 
             #Save the new filtered assembly
-            SeqIO.write(rec_to_keep,self.out + specimen + "_Over_" + str(self.length_thresh) + "pb_" + str(self.cov_thresh) + "X"  + '.fasta','fasta')
+            SeqIO.write(rec_to_keep, self.out + specimen + '.fasta', 'fasta')
 
         except Exception as e:
             print "In DoFiltration"
@@ -225,11 +228,11 @@ class AssembStat(AssemblyCommon):
 #Contigs filtration
 if (args.do[0] == 'filter'):
     my_filter = Filter()
-    my_filter.ParseYamlFile()
+    my_filter.MakeSpecList()
     map(my_filter.DoFiltration,my_filter.SpecList)
 #Statistics calculation
 else:
     my_stat = AssembStat()
-    my_stat.ParseYamlFile()
+    my_stat.MakeSpecList()
     map(my_stat.CompileLengthAndCov, my_stat.SpecList)
 
