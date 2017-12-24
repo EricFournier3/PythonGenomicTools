@@ -72,6 +72,12 @@ class AssemblyCommon(object):
 
 
     def MakeSpecList(self):
+        """
+        Build the specimen name list from fasta files in
+        self.assembly_dir
+
+        :return:
+        """
 
         fasta_list  = Bash.GetFastaInDir(self.assembly_dir)
 
