@@ -265,7 +265,7 @@ class AssembStat(AssemblyCommon):
                 for my_rec in SeqIO.parse("{0}{1}{2}".format(self.assembly_dir, specimen, '.fasta'), "fasta"):
 
                     #Fasta header parsing
-                    id_parse = re.search(r'NODE_(\d+)_length_(\d+)_cov_(\S+)_ID_', my_rec.id)
+                    id_parse = re.search(r'NODE_(\d+)_length_(\d+)_cov_(\S+)', my_rec.id)
 
                     #Node ID
                     node = id_parse.group(1)
