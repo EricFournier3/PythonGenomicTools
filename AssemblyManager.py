@@ -3,6 +3,7 @@ import os
 import sys
 import re
 import argparse
+import subprocess
 
 from Bio import SeqIO
 
@@ -17,6 +18,13 @@ Command line example for filtration:
 
 python AssemblyManager.py --assembdir '/home/eric/ProjetPersonnel/Programmation/ProjetPython/NGS/TEST/' --do 'filter' 
 --gtp '/home/eric/ProjetPersonnel/Programmation/ProjetPython/NGS/InGit/GenomicTools/' --length 1000 --cov 5
+
+Command line example for statistics:
+-----------------------------------
+
+python AssemblyManager.py --assembdir '/home/eric/ProjetPersonnel/Programmation/ProjetPython/NGS/TEST/' --do 'stat' 
+--gtp '/home/eric/ProjetPersonnel/Programmation/ProjetPython/NGS/InGit/GenomicTools/' --length 1000 --cov 5 
+--qctl 2000 10000 50000 100000 200000
 
 '''
 
@@ -40,10 +48,15 @@ parser.add_argument('--cov',type=int,metavar='[Required : coverage threshold for
 #Path to the GenomicTools modules
 parser.add_argument('--gtp',type=str,metavar='[Required : path to GenomicTools modules]',required=True,nargs=1)
 
+#Quast contigs threshold list
+parser.add_argument('--qctl', type=str,metavar='[Contigs threshold for Quast statistics]', required=False,nargs='+')
+
+
+
 args=parser.parse_args()
 
 if (not os.path.exists(args.gtp[0])):
-    print "No GenomicsTools modules"
+    print "GenomicsTools modules is missing"
     exit(0)
 
 sys.path.append(args.gtp[0])
@@ -79,9 +92,11 @@ class AssemblyCommon(object):
         :return:
         """
 
-        fasta_list  = Bash.GetFastaInDir(self.assembly_dir)
+        self.fasta_list  = Bash.GetFastaInDir(self.assembly_dir)
 
-        self.SpecList = [PythonUtils.GetFastaPrefix(x) for x in list(fasta_list) ]
+        print self.fasta_list
+
+        self.SpecList = [PythonUtils.GetFastaPrefix(x) for x in list(self.fasta_list) ]
 
 
 
@@ -122,7 +137,8 @@ class Filter(AssemblyCommon):
             for my_rec in SeqIO.parse("{0}{1}{2}".format(self.assembly_dir,specimen,'.fasta'), "fasta"):
 
                 #Fasta header parsing
-                id_parse = re.search(r'NODE_\d+_length_(\d+)_cov_(\S+)_ID_',my_rec.id)
+
+                id_parse = re.search(r'NODE_\d+_length_(\d+)_cov_(\S+)',my_rec.id)
                 contig_length = id_parse.group(1)
                 contig_cov = id_parse.group(2)
 
@@ -151,6 +167,18 @@ class AssembStat(AssemblyCommon):
         # Output directory for statistics files
         self.out = self.assembly_dir + r"Stat/"
 
+        #Contig threshold list needed to compute Quast statistics
+        self.quast_contig_thresh_list = args.qctl
+
+        if not self.FindQuast():
+            print "ERROR : cannot find quast on this system"
+            exit(0)
+
+        if self.quast_contig_thresh_list is None:
+            print "ERROR : Quast need a contig threshold list to compute statistics"
+            exit(0)
+
+
         # Create the output directory
         try:
             os.mkdir(self.out)
@@ -158,6 +186,45 @@ class AssembStat(AssemblyCommon):
             print "In __init__"
             print e
             exit(0)
+
+    def FindQuast(self):
+        """
+        Check if quast.py is installed
+        :return:
+        """
+
+        command = "whereis quast"
+
+        proc = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True)
+        (out, err) = proc.communicate()
+
+        if (out.find('quast.py') > -1):
+            return True
+
+        return False
+
+    def ExecuteQuast(self):
+        """
+        Compute Quast statistics
+        :return:
+        """
+
+        out_dir = self.assembly_dir + r"Quast/"
+
+        #Convert contig threshold list to string using comma as separator
+        self.quast_contig_thresh_list = ','.join(self.quast_contig_thresh_list)
+
+        #Full path for each fasta file
+        self.fasta_list = [self.assembly_dir + x for x in self.fasta_list]
+
+        #Convert to string usin space as separator
+        self.fasta_list = ' '.join(self.fasta_list)
+
+        command = "quast.py --silent -o {0} --min-contig {1} --contig-thresholds {2} --plots-format {3} {4}".format(out_dir,self.length_thresh,self.quast_contig_thresh_list,
+                                                                                             'png',self.fasta_list)
+
+        os.system(command)
+
 
 
     def CompileLengthAndCov(self,specimen):
@@ -241,4 +308,5 @@ else:
     my_stat = AssembStat()
     my_stat.MakeSpecList()
     map(my_stat.CompileLengthAndCov, my_stat.SpecList)
+    my_stat.ExecuteQuast()
 
